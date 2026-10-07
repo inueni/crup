@@ -1,0 +1,9 @@
+ada_url
+can_ada
+chardet
+crup
+pydomainextractor
+pyfaup
+rich
+tldextract
+yarl
