@@ -97,6 +97,7 @@ jobs:
         run: cargo test --locked --test psl_data
 
   linux:
+    if: &release_build ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       fail-fast: false
@@ -134,6 +135,7 @@ jobs:
           path: dist
 
   musllinux:
+    if: *release_build
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -166,6 +168,7 @@ jobs:
           path: dist
 
   windows:
+    if: *release_build
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -200,6 +203,7 @@ jobs:
           path: dist
 
   macos:
+    if: *release_build
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -269,7 +273,7 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
+    if: *release_build
     needs: [test, rust, linux, musllinux, windows, macos, sdist]
     permissions:
       # Use to sign the release artifacts
