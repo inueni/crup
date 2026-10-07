@@ -1,0 +1,307 @@
+# Wheel jobs are based on `maturin generate-ci github`.
+# Test jobs, release gates, and dependency versions are maintained manually.
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - '[0-9]*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-26.04, macos-26, windows-latest]
+        python-version: ["3.14", "3.14t"]
+        include:
+          - os: ubuntu-26.04
+            python-version: "3.10"
+          - os: ubuntu-26.04
+            python-version: "3.11"
+          - os: ubuntu-26.04
+            python-version: "3.12"
+          - os: ubuntu-26.04
+            python-version: "3.13"
+          - os: ubuntu-26.04
+            python-version: "pypy3.11"
+    defaults:
+      run:
+        shell: bash
+    env:
+      CRUP_EXPECT_FREE_THREADED: ${{ endsWith(matrix.python-version, 't') && '1' || '0' }}
+      CRUP_THREAD_TEST_ROUNDS: ${{ endsWith(matrix.python-version, 't') && '500' || '100' }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Update Rust
+        run: rustup update stable --no-self-update
+      - name: Install test and build tools
+        run: python -m pip install "maturin==1.15.0" "pytest>=9.1.1"
+      - name: Build test wheel
+        run: python -m maturin build --release --locked --interpreter python --out test-wheels
+      - name: Inspect test wheel
+        run: python scripts/check_dist.py test-wheels/*.whl --psl-metadata python/crup/psl_snapshot.json
+      - name: Install test wheel
+        run: python -m pip install --force-reinstall --no-deps --no-index --find-links test-wheels crup
+      - name: Verify interpreter and module GIL state
+        run: |
+          python -W error::RuntimeWarning - <<'PY'
+          import os
+          import sys
+          import sysconfig
+
+          expected_free_threaded = os.environ["CRUP_EXPECT_FREE_THREADED"] == "1"
+          assert bool(sysconfig.get_config_var("Py_GIL_DISABLED")) == expected_free_threaded
+          gil_enabled = getattr(sys, "_is_gil_enabled", lambda: True)
+          assert gil_enabled() == (not expected_free_threaded)
+          import crup
+          import crup.psl
+          assert gil_enabled() == (not expected_free_threaded)
+          print(sys.version)
+          print(f"crup: {crup.__file__}; GIL enabled: {gil_enabled()}")
+          PY
+      - name: Run Python tests
+        # Includes live PSL download and reload validation.
+        env:
+          CRUP_REQUIRE_INSTALLED: "1"
+        run: python -m pytest -q
+
+  rust:
+    name: Rust checks
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Install Rust with Clippy
+        run: rustup toolchain install stable --profile minimal --component clippy
+      - name: Check Rust code
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Test PSL update implementation
+        run: cargo test --locked --test psl_data
+
+  linux:
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - runner: ubuntu-26.04
+            target: x86_64
+          - runner: ubuntu-24.04
+            target: x86
+          - runner: ubuntu-26.04-arm
+            target: aarch64
+          - runner: ubuntu-26.04
+            target: armv7
+          - runner: ubuntu-26.04
+            target: s390x
+          - runner: ubuntu-26.04
+            target: ppc64le
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1.51.0
+        with:
+          maturin-version: "1.15.0"
+          target: ${{ matrix.platform.target }}
+          args: --locked --release --out dist --find-interpreter
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          manylinux: ${{ matrix.platform.target == 'x86' && '2_28' || 'auto' }}
+      - name: Upload wheels
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: wheels-linux-${{ matrix.platform.target }}
+          path: dist
+
+  musllinux:
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      matrix:
+        platform:
+          - runner: ubuntu-26.04
+            target: x86_64
+          - runner: ubuntu-26.04
+            target: x86
+          - runner: ubuntu-26.04
+            target: aarch64
+          - runner: ubuntu-26.04
+            target: armv7
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1.51.0
+        with:
+          maturin-version: "1.15.0"
+          target: ${{ matrix.platform.target }}
+          args: --locked --release --out dist --find-interpreter
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          manylinux: musllinux_1_2
+      - name: Upload wheels
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: wheels-musllinux-${{ matrix.platform.target }}
+          path: dist
+
+  windows:
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        platform:
+          - runner: windows-latest
+            target: x64
+          - runner: windows-latest
+            target: x86
+        include:
+          - platform:
+              runner: windows-latest
+              target: x64
+            python-version: "3.14t"
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.platform.target }}
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1.51.0
+        with:
+          maturin-version: "1.15.0"
+          target: ${{ matrix.platform.target }}
+          args: --locked --release --out dist --interpreter python
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      - name: Upload wheels
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: wheels-windows-${{ matrix.platform.target }}-${{ matrix.python-version }}
+          path: dist
+
+  macos:
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      matrix:
+        platform:
+          - runner: macos-26-intel
+            target: x86_64
+          - runner: macos-26
+            target: aarch64
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: |
+            3.10
+            3.11
+            3.12
+            3.13
+            3.14
+            3.14t
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1.51.0
+        with:
+          maturin-version: "1.15.0"
+          target: ${{ matrix.platform.target }}
+          args: --locked --release --out dist --find-interpreter
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      - name: Upload wheels
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: wheels-macos-${{ matrix.platform.target }}
+          path: dist
+
+  sdist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Update Rust
+        run: rustup update stable --no-self-update
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1.51.0
+        with:
+          maturin-version: "1.15.0"
+          command: sdist
+          args: --out dist
+      - name: Inspect sdist
+        run: python scripts/check_dist.py dist/*.tar.gz --psl-metadata python/crup/psl_snapshot.json
+      - name: Build and install from sdist
+        env:
+          MATURIN_PEP517_ARGS: --locked
+        run: |
+          python -m pip install "maturin==1.15.0" "pytest>=9.1.1"
+          python -m pip install --no-build-isolation --no-deps dist/crup-*.tar.gz
+      - name: Verify installed sdist package
+        env:
+          CRUP_REQUIRE_INSTALLED: "1"
+        run: python -m pytest -q
+      - name: Upload sdist
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: wheels-sdist
+          path: dist
+
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
+    needs: [test, rust, linux, musllinux, windows, macos, sdist]
+    permissions:
+      # Use to sign the release artifacts
+      id-token: write
+      # Used to upload release artifacts
+      contents: write
+      # Used to generate artifact attestation
+      attestations: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14"
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: wheels-*
+      - name: Inspect release artifacts
+        env:
+          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+        shell: bash
+        run: |
+          python scripts/check_dist.py wheels-*/* --psl-metadata python/crup/psl_snapshot.json ${RELEASE_TAG:+--tag "$RELEASE_TAG"}
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v4.2.2
+        with:
+          subject-path: 'wheels-*/*'
+      - name: Publish to PyPI
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        uses: PyO3/maturin-action@v1.51.0
+        env:
+          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        with:
+          maturin-version: "1.15.0"
+          command: upload
+          args: --non-interactive --skip-existing wheels-*/*

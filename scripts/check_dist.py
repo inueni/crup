@@ -61,7 +61,7 @@ def check(path, expected_version, expected_psl=None):
         raise ValueError("unexpected package name or Python requirement")
 
     if expected_version is not None and metadata["Version"] != expected_version:
-        raise ValueError(f"version {metadata['Version']} does not match tag v{expected_version}")
+        raise ValueError(f"version {metadata['Version']} does not match tag {expected_version}")
 
     verify_snapshot(psl, snapshot)
 
@@ -74,10 +74,10 @@ def check(path, expected_version, expected_psl=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("archives", nargs="+", type=Path)
-    parser.add_argument("--tag", help="release tag, e.g. v0.1.0")
+    parser.add_argument("--tag", help="release tag, e.g. 0.1.0")
     parser.add_argument("--psl-metadata", type=Path, help="expected repository PSL snapshot metadata")
     args = parser.parse_args()
     expected_psl = json.loads(args.psl_metadata.read_text()) if args.psl_metadata else None
 
     for path in args.archives:
-        check(path, args.tag.removeprefix("v") if args.tag else None, expected_psl)
+        check(path, args.tag, expected_psl)
