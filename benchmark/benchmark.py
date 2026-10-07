@@ -31,20 +31,14 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
-from workloads import bench_crup, bench_crup_mutable, bench_domain_crup, load_urls
-
-
-def bench_urlparse(urls):
-    for url in urls:
-        try:
-            p = urlparse(url)
-            p.scheme
-            p.hostname
-            p.path
-            p.query
-
-        except ValueError:
-            continue
+from workloads import (
+    bench_can_ada,
+    bench_crup,
+    bench_crup_mutable,
+    bench_domain_crup,
+    bench_urlparse,
+    load_urls,
+)
 
 
 def bench_pyfaup(urls):
@@ -62,19 +56,6 @@ def bench_ada_url(urls):
     for url in urls:
         try:
             p = ada_url.URL(url)
-            p.protocol
-            p.hostname
-            p.pathname
-            p.search
-
-        except ValueError:
-            continue
-
-
-def bench_can_ada(urls):
-    for url in urls:
-        try:
-            p = can_ada.parse(url)
             p.protocol
             p.hostname
             p.pathname

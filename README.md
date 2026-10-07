@@ -433,7 +433,7 @@ Local proxy and HTTP server tests still run with `--offline`.
 
 ### Cross-platform benchmarks
 
-Contributors with write access can run benchmarks on Linux, Windows and macOS through **Actions → Benchmark → Run workflow**. Select a candidate branch and optionally set **baseline-ref** to compare another revision. Results appear in job summaries, with raw samples available as artifacts. Repeat runs before interpreting small timing differences.
+Contributors with write access can run benchmarks on Linux, Windows and macOS through **Actions → Benchmark → Run workflow**. Select a candidate branch and optionally set **baseline-ref** to compare another revision. Each run includes `can_ada` and `urlparse` reference timings for parsing and component access. Results appear in job summaries, with raw samples available as artifacts. Repeat runs before interpreting small timing differences.
 
 ## Credits
 
