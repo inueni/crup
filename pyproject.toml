@@ -1,0 +1,55 @@
+[project]
+name = "crup"
+description = "CRusty Url Parser - a fast Rust powered URL parser for Python"
+authors = [{name = "Mitja Pagon", email = "mitja.pagon@inueni.com"}]
+license = "MIT"
+license-files = ["LICENSE"]
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["url", "parser", "rust", "python", "parsing", "fast"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dynamic = ["version"]
+
+[project.urls]
+"Homepage" = "https://github.com/inueni/crup"
+"Bug Tracker" = "https://github.com/inueni/crup/issues"
+"Changelog" = "https://github.com/inueni/crup/releases"
+
+[build-system]
+requires = ["maturin>=1.15,<2.0"]
+build-backend = "maturin"
+
+[dependency-groups]
+dev = [
+    "maturin>=1.15,<2.0",
+    "pytest>=9.1.1",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+python-source = "python"
+module-name = "crup._crup"
+include = [
+    { path = ".cargo/config.toml", format = "sdist" },
+    { path = "crup/public_suffix_list.dat", format = ["sdist", "wheel"] },
+    { path = "crup/psl_snapshot.json", format = ["sdist", "wheel"] },
+]
+exclude = ["benchmark/**", "assets/**", ".github/**", "uv.lock", "SPEC.md"]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

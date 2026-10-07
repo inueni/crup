@@ -1,0 +1,2 @@
+# Preserve the PSL bytes so snapshot SHA256 matches on every platform.
+python/crup/public_suffix_list.dat -text

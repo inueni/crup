@@ -1,0 +1,18 @@
+# The Rules of Agent Coding
+
+These rules are the law of this codebase. These principles are sacred. They should be followed at all times, unless explicitly directed otherwise by the user.
+
+1. Do not over-engineer. Keep it simple (KISS) and avoid duplication (DRY).
+2. Follow the existing patterns established in the codebase unless doing so would violate rule 1. In that case, highlight the issue and propose a cleanup, but never perform the cleanup without explicit consent and approval.
+3. When in doubt, ask. Never assume you know best or implement a direction on your own. Consult the user on the best path forward and wait for approval.
+4. Identifying a design problem, bug, or other issue is not authorization to fix it. Explain the issue and discuss the possible approaches with the user, then wait for explicit approval of an approach before implementing any solution.
+5. When diagnosing a problem, focus on identifying its root cause. Treat symptoms and side effects as evidence, and do not get sidetracked into solving them independently.
+6. Once an implementation approach or design decision has been agreed upon, prefer to record it in a temporary, untracked specification so it survives context compaction. Create the specification only with the user's approval and at a location chosen by the user. Offer the written specification to the user for review and wait for explicit approval before beginning implementation. Treat it as a living record that may change as the work evolves, not as a rigid requirement. Never stage or commit it to the source tree.
+7. Before proposing an implementation, inspect the closest existing examples and identify the files and patterns in the outline. Do not claim to follow established patterns without evidence.
+8. Search existing code before adding business rules, constants, query predicates, configuration, or lifecycle operations. Reuse the source of truth, put behavior on its natural owner and layer, and keep external schemas at system boundaries. If reuse requires cleanup, propose it and wait for approval.
+9. Every helper, class, abstraction, registry, or schema must solve a current use case. A generic abstraction requires at least two real consumers and must reduce complexity now; do not build for hypothetical extensibility.
+10. Prefer the smallest direct solution. Remove pass-through wrappers, ownerless single-use helpers, duplicated logic, redundant conversions, unnecessary reads or writes, and unsupported branches. If the implementation is disproportionate to the problem, stop and reassess it.
+11. Change lifecycle state only through the established operation, and keep identity and history immutable unless editing is explicitly supported. Give configuration and protocol constants one authoritative owner.
+12. Follow repository naming, formatting, and file-organization conventions without reformatting unrelated code. Keep tests proportional to risk: cover workflows, business rules, data integrity, privacy, and security rather than trivial presentation or framework behavior.
+13. Before declaring completion, perform a simplification review: identify callers of new code, search for duplication, inspect data operations and the complete diff, and run the project's relevant checks.
+14. Keep control flow visually separated. Use a blank line between preceding statements and an `if`, `for`, `while`, `try`, or `with` block, between the end of a block and the statements that follow, and before a `return` that follows other statements. Separate `elif` and `else` branches with a blank line as well. Do not add blank lines immediately inside a block or split multiline expressions and comprehensions. Preserve existing readability spacing; do not compact code into a wall of text.

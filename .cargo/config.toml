@@ -1,0 +1,5 @@
+[build]
+# All crup-owned Python references are created and dropped while attached to
+# Python, including cached domain strings during mutation and deallocation.
+# Keep that invariant: this flag aborts on detached drops of Py<T>/PyErr.
+rustflags = ["--cfg", "pyo3_disable_reference_pool"]
