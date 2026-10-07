@@ -1,0 +1,10 @@
+// Deliberately small: test crup's integration, not the upstream PSL database.
+// ===BEGIN ICANN DOMAINS===
+test
+co.test
+*.wild.test
+!except.wild.test
+// ===END ICANN DOMAINS===
+// ===BEGIN PRIVATE DOMAINS===
+hosted.test
+// ===END PRIVATE DOMAINS===
