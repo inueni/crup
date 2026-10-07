@@ -124,11 +124,13 @@ fn readers_see_complete_old_or_new_files_during_replacement() {
         let (path, old, new) = (path.clone(), old.clone(), new.clone());
         let (done, reads, start) = (done.clone(), reads.clone(), start.clone());
         thread::spawn(move || {
-            start.wait();
             while !done.load(Ordering::Acquire) {
                 let text = fs::read_to_string(&path).unwrap();
                 assert!(text == old || text == new, "observed a partial cache file");
-                reads.fetch_add(1, Ordering::Relaxed);
+
+                if reads.fetch_add(1, Ordering::Relaxed) == 0 {
+                    start.wait();
+                }
             }
         })
     };
