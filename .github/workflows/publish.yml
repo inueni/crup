@@ -181,13 +181,15 @@ jobs:
         uses: actions/attest-build-provenance@v4.2.2
         with:
           subject-path: 'wheels-*/*'
-      - name: Publish to PyPI
+      - name: Install uv
         if: &publish_release ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
-        uses: PyO3/maturin-action@v1.51.0
+        uses: astral-sh/setup-uv@v10.3.0
         with:
-          maturin-version: "1.15.0"
-          command: upload
-          args: --non-interactive --skip-existing wheels-*/*
+          version: "0.13.0"
+          enable-cache: false
+      - name: Publish to PyPI
+        if: *publish_release
+        run: uv publish --trusted-publishing always wheels-*/*
       - name: Create GitHub Release
         if: *publish_release
         env:
