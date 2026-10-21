@@ -95,7 +95,7 @@ jobs:
             --output results/benchmark.json "${baseline_args[@]}"
       - name: Upload measurements
         if: always()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: benchmark-${{ matrix.os }}
           path: results/

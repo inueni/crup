@@ -23,6 +23,7 @@ from urllib.parse import urlparse
 
 import ada_url
 import can_ada
+import crup
 import pydomainextractor
 import tldextract
 import yarl
@@ -36,6 +37,7 @@ from workloads import (
     bench_crup,
     bench_crup_mutable,
     bench_domain_crup,
+    bench_extract_domain_crup,
     bench_urlparse,
     load_urls,
 )
@@ -135,6 +137,26 @@ def bench_domain_pyfaup(urls):
         p.get_domain()
 
 
+def bench_extract_domain_pydomainextractor(hostnames):
+    extract = pydomainextractor.DomainExtractor().extract
+
+    for hostname in hostnames:
+        try:
+            extract(hostname)
+
+        except ValueError:
+            continue
+
+
+def bench_extract_domain_tldextract(hostnames):
+    for hostname in hostnames:
+        try:
+            tldextract.extract(hostname)
+
+        except ValueError:
+            continue
+
+
 def bench(func, urls, name, runs=10):
     """Benchmark a function with pytest-benchmark style statistics."""
 
@@ -150,7 +172,7 @@ def bench(func, urls, name, runs=10):
         max_time = max(times)
         mean_time = statistics.mean(times)
 
-        # Calculate attempted inputs/second, including rejected URLs, using best time
+        # Calculate attempted inputs/second, including rejections, using best time
         rate = len(urls) / min_time
 
         return {
@@ -183,7 +205,7 @@ def run_benchmarks(console, benchmarks, urls, runs=10):
     return results
 
 
-def format_results_table(results, title, console):
+def format_results_table(results, title, console, unit="URLs"):
     """Format results in pytest-benchmark style with factors using Rich."""
 
     if not results:
@@ -221,7 +243,7 @@ def format_results_table(results, title, console):
             f"{result['min']*1000:.1f} ms ([cyan]{min_factor:.2f}[/cyan])",
             f"{result['max']*1000:.1f} ms ([cyan]{max_factor:.2f}[/cyan])",
             f"{result['mean']*1000:.1f} ms ([cyan]{mean_factor:.2f}[/cyan])",
-            f"{result['rate']:,.0f} URLs/s"
+            f"{result['rate']:,.0f} {unit}/s"
         )
 
     console.print(table)
@@ -238,7 +260,7 @@ def main():
 
     console.print("[bold blue]crup URL Parsing Benchmark[/bold blue]")
     console.print(f"Input URLs: {n:,}")
-    console.print("Throughput counts attempted inputs, including rejected URLs.")
+    console.print("Throughput counts attempted inputs, including rejections.")
     console.print(f"Runs per test: {runs}")
     console.print()
 
@@ -271,6 +293,30 @@ def main():
 
     if domain_results:
         format_results_table(domain_results, "URL Parsing + Domain Extraction Results", console)
+
+    # Prepare bare hostnames outside the timed extraction workload.
+    hostnames = []
+
+    for text in urls:
+        try:
+            hostname = crup.parse(text).hostname
+
+        except ValueError:
+            continue
+
+        if hostname is not None:
+            hostnames.append(hostname)
+
+    console.print(f"Input hostnames: {len(hostnames):,} (URL parsing excluded from timing)")
+    extraction_benchmarks = [
+        ("pydomainextractor", bench_extract_domain_pydomainextractor),
+        ("tldextract", bench_extract_domain_tldextract),
+        ("crup", bench_extract_domain_crup),
+    ]
+    extraction_results = run_benchmarks(console, extraction_benchmarks, hostnames, runs)
+
+    if extraction_results:
+        format_results_table(extraction_results, "Hostname Domain Extraction Results", console, unit="hostnames")
 
 
 if __name__ == "__main__":

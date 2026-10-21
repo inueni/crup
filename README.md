@@ -113,9 +113,20 @@ Both `domain` and `domain_info()` return `None` when there is no registrable dom
 
 Domain information is calculated on first access and cached per URL. Changing a mutable URL's hostname clears its cached result.
 
+#### Extracting from a hostname
+
+For a bare hostname, `crup.extract_domain()` returns the same `DomainInfo`:
+
+```python
+info = crup.extract_domain("blog.example.co.uk")
+print(info.domain)  # 'example.co.uk'
+```
+
+It accepts the same `psl` modes and returns `None` when there is no registrable domain. Invalid host input raises `ValueError`.
+
 #### Choosing a PSL type
 
-By default, crup uses ICANN suffixes. Pass `psl` to either `crup.parse()` or `crup.URL.parse()` to include private suffixes, such as `github.io`, which distinguish individual sites on a shared hosting service.
+By default, crup uses ICANN suffixes. Pass `psl` to `crup.parse()`, `crup.URL.parse()` or `crup.extract_domain()` to include private suffixes, such as `github.io`, which distinguish individual sites on a shared hosting service.
 
 | PSL type | Suffixes used | Domain for `user.github.io` |
 | --- | --- | --- |
@@ -257,33 +268,41 @@ Importing crup leaves the GIL disabled in a free-threaded interpreter. The same 
 
 ## Performance
 
-The [benchmark](https://github.com/inueni/crup/blob/main/benchmark/benchmark.py) measures parsing followed by component access, as well as parsing combined with domain extraction. It uses a real-world URL dataset from Ada's benchmark. Run it with current dependencies to compare performance on your system.
+The [benchmark](https://github.com/inueni/crup/blob/main/benchmark/benchmark.py) measures parsing followed by component access, parsing combined with domain extraction, and domain extraction from bare hostnames. It uses a real-world URL dataset from Ada's benchmark. Run it with current dependencies to compare performance on your system.
 
 ### Benchmark results
 
-Sample run on an AMD Ryzen 7 7700 server (8C/16T) with 64 GB of RAM, using Linux and CPython 3.12. The benchmark covered 100,031 URLs in five passes of 10 runs per workload, pinned to one CPU. The tables summarize all 50 timings for a local release build of crup. Times cover the full dataset; throughput counts attempted inputs, including rejected URLs, and uses the minimum time.
+Sample run on an AMD Ryzen 7 7700 server (8C/16T) with 64 GB of RAM, using Linux and CPython 3.12. Five fresh processes ran each workload 10 times, pinned to one CPU. URL workloads use 100,031 URLs; hostname extraction uses 99,999 pre-extracted hostnames. Tables pool all 50 timings per workload; throughput uses the minimum time and counts attempted inputs.
 
 #### URL parsing and component access
 
 | Library | Min | Max | Mean | Throughput |
 | --- | ---: | ---: | ---: | ---: |
-| `can_ada` | 42.3 ms | 43.7 ms | 42.9 ms | 2,364,484 URLs/s |
-| `crup` | 48.7 ms | 50.8 ms | 49.4 ms | 2,054,113 URLs/s |
-| `crup mutable` | 52.1 ms | 53.5 ms | 52.9 ms | 1,919,645 URLs/s |
-| `urlparse` | 294.9 ms | 304.0 ms | 299.2 ms | 339,200 URLs/s |
-| `pyfaup` | 296.5 ms | 314.2 ms | 300.3 ms | 337,385 URLs/s |
-| `ada_url` | 362.3 ms | 382.6 ms | 369.5 ms | 276,133 URLs/s |
-| `yarl` | 369.9 ms | 395.9 ms | 382.6 ms | 270,460 URLs/s |
+| `can_ada` | 42.7 ms | 47.6 ms | 43.8 ms | 2,343,141 URLs/s |
+| `crup` | 46.1 ms | 47.9 ms | 46.9 ms | 2,171,656 URLs/s |
+| `crup mutable` | 49.1 ms | 52.4 ms | 50.1 ms | 2,035,820 URLs/s |
+| `urlparse` | 299.1 ms | 314.8 ms | 305.7 ms | 334,457 URLs/s |
+| `pyfaup` | 299.7 ms | 313.2 ms | 305.6 ms | 333,784 URLs/s |
+| `ada_url` | 357.8 ms | 375.9 ms | 366.0 ms | 279,604 URLs/s |
+| `yarl` | 371.9 ms | 386.8 ms | 378.4 ms | 268,949 URLs/s |
 
 #### URL parsing and domain extraction
 
 | Library | Min | Max | Mean | Throughput |
 | --- | ---: | ---: | ---: | ---: |
-| `crup` | 58.4 ms | 66.9 ms | 59.6 ms | 1,712,864 URLs/s |
-| `can_ada + pydomainextractor` | 72.8 ms | 75.1 ms | 73.8 ms | 1,373,668 URLs/s |
-| `pyfaup` | 296.9 ms | 305.1 ms | 302.8 ms | 336,974 URLs/s |
-| `ada_url + pydomainextractor` | 395.0 ms | 412.9 ms | 404.9 ms | 253,273 URLs/s |
-| `urlparse + tldextract` | 517.6 ms | 538.8 ms | 528.8 ms | 193,256 URLs/s |
+| `crup` | 52.2 ms | 55.0 ms | 53.4 ms | 1,916,566 URLs/s |
+| `can_ada + pydomainextractor` | 72.7 ms | 77.1 ms | 74.4 ms | 1,376,798 URLs/s |
+| `pyfaup` | 294.1 ms | 309.3 ms | 302.9 ms | 340,154 URLs/s |
+| `ada_url + pydomainextractor` | 391.8 ms | 405.0 ms | 398.6 ms | 255,323 URLs/s |
+| `urlparse + tldextract` | 507.8 ms | 545.7 ms | 524.9 ms | 197,008 URLs/s |
+
+#### Hostname domain extraction
+
+| Library | Min | Max | Mean | Throughput |
+| --- | ---: | ---: | ---: | ---: |
+| `crup` | 10.6 ms | 11.2 ms | 10.8 ms | 9,462,614 hostnames/s |
+| `pydomainextractor` | 13.7 ms | 14.1 ms | 13.9 ms | 7,311,300 hostnames/s |
+| `tldextract` | 182.5 ms | 190.4 ms | 186.8 ms | 547,946 hostnames/s |
 
 ### Running the benchmark
 
@@ -359,6 +378,8 @@ Invalid schemes or hosts, and assignments unsupported by the URL's scheme, raise
 See [Query parameters and path components](#query-parameters-and-path-components) and [Domain extraction](#domain-extraction) for examples.
 
 ### Domain information
+
+`crup.extract_domain(hostname, psl=None)` returns `DomainInfo | None` from a bare hostname.
 
 `crup.DomainInfo` has three read-only fields:
 

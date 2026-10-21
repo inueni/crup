@@ -18,6 +18,7 @@ fn crup<'py>(py: Python<'py>, m: &Bound<'py, PyModule>) -> PyResult<()> {
 
     m.add_class::<ParsedUrl>()?;
     m.add_function(wrap_pyfunction!(parse, m)?)?;
+    m.add_function(wrap_pyfunction!(psl::extract_domain, m)?)?;
 
     m.add_class::<MutableUrl>()?;
     m.add_class::<DomainInfo>()?;

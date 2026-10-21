@@ -5,6 +5,7 @@ use pyo3::sync::PyOnceLock;
 use pyo3::types::{PyModule, PyString};
 use once_cell::sync::OnceCell;
 use directories::ProjectDirs;
+use url::Host;
 use crate::psl_data::{PslLists, read_lists, update_cache};
 use std::{
     borrow::Cow,
@@ -72,14 +73,18 @@ impl From<publicsuffix::Type> for PslType {
 pub struct DomainInfo {
     #[pyo3(get)]
     pub domain: String,
-    #[pyo3(get)]
-    pub suffix: String,
+    suffix_start: usize,
     #[pyo3(get)]
     pub psl: Option<PslType>,
 }
 
 #[pymethods]
 impl DomainInfo {
+    #[getter]
+    fn suffix(&self) -> &str {
+        &self.domain[self.suffix_start..]
+    }
+
     fn __repr__(&self) -> String {
         let psl: String = match self.psl {
             Some(ref psl) => format!("'{}'", psl),
@@ -87,7 +92,7 @@ impl DomainInfo {
         };
         format!("<crup.DomainInfo(domain='{}', suffix='{}', psl={})>",
             self.domain,
-            self.suffix,
+            self.suffix(),
             psl,
         )
     }
@@ -164,7 +169,7 @@ impl DomainMatch {
     pub fn info(&self, host: &str) -> DomainInfo {
         DomainInfo {
             domain: self.normalized(self.domain(host)),
-            suffix: self.normalized(&host[self.suffix_start..self.end]),
+            suffix_start: self.suffix_start - self.domain_start,
             psl: self.psl,
         }
     }
@@ -254,6 +259,35 @@ pub fn registered_domain(host: &str, psl_type: PslType) -> Option<DomainMatch> {
             .filter(|domain| domain.suffix().typ() == Some(publicsuffix::Type::Private)),
     };
     domain.map(|domain| DomainMatch::new(host, domain, normalize_case))
+}
+
+/// Extracts registrable domain information from a hostname without parsing a URL.
+#[pyfunction]
+#[pyo3(signature = (hostname, psl = None))]
+pub fn extract_domain(hostname: &str, psl: Option<PslType>) -> PyResult<Option<DomainInfo>> {
+    // Borrow only plain lowercase ASCII labels. Punycode needs IDNA checks,
+    // and a final label starting with a letter cannot be a WHATWG IPv4 number.
+    let normalized_ascii = hostname.rsplit('.').next()
+        .and_then(|label| label.as_bytes().first())
+        .is_some_and(u8::is_ascii_lowercase)
+        && hostname.split('.').all(|label| {
+            !label.is_empty() && !label.starts_with("xn--")
+                && label.bytes().all(|byte| byte.is_ascii_lowercase()
+                    || byte.is_ascii_digit() || byte == b'-')
+        });
+    let host = if normalized_ascii {
+        Cow::Borrowed(hostname)
+
+    } else {
+        match Host::parse(hostname)
+            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))? {
+            Host::Domain(host) => Cow::Owned(host),
+            Host::Ipv4(_) | Host::Ipv6(_) => return Ok(None),
+        }
+    };
+
+    Ok(registered_domain(&host, psl.unwrap_or(PslType::Icann))
+        .map(|domain| domain.info(&host)))
 }
 
 #[pyfunction]

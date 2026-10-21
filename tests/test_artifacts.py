@@ -24,6 +24,9 @@ def test_package_outside_checkout(tmp_path, run_python):
         assert snapshot["sha256"] == hashlib.sha256(package.joinpath("public_suffix_list.dat").read_bytes()).hexdigest()
         # No user cache: prove that the package's bundled PSL is usable.
         assert not crup.psl.get_psl_path().exists()
+        info = crup.extract_domain("www.example.co.uk")
+        assert info.domain == "example.co.uk"
+        assert info.suffix == "co.uk"
 
         for factory in (crup.parse, crup.URL.parse):
             parsed = factory("https://www.example.co.uk/path?a=1")

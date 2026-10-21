@@ -62,6 +62,15 @@ def bench_crup_parse(urls):
             continue
 
 
+def bench_extract_domain_crup(hostnames):
+    for hostname in hostnames:
+        try:
+            crup.extract_domain(hostname)
+
+        except ValueError:
+            continue
+
+
 def bench_can_ada(urls):
     for url in urls:
         try:

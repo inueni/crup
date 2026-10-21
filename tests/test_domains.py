@@ -42,6 +42,68 @@ def test_domain_rules(text, mode, expected):
 
     assert parsed.hostname == hostname  # Lookup must not rewrite opaque hosts.
 
+    if hostname is not None:
+        assert crup.extract_domain(hostname, getattr(crup.psl, mode)) == info
+
+
+@pytest.mark.parametrize("hostname", [
+    "www.EXAMPLE.CO.TEST.", "www.example.co.test", "www.example\u3002co\uff0etest\uff61",
+    "%77ww.example.co.test",
+])
+def test_extract_domain_normalization(hostname):
+    expected = crup.parse("https://www.example.co.test").domain_info()
+    assert crup.extract_domain(hostname) == expected
+    assert crup.extract_domain(hostname=hostname, psl=None) == expected
+
+
+def test_extract_domain_idn():
+    assert crup.extract_domain("sub.例え.test") == crup.parse("https://sub.例え.test").domain_info()
+
+
+@pytest.mark.parametrize("hostname", [
+    "www.example.test", "a1-b2.example.test", "1.example.test", "-example.test",
+    "example-.test", "ab--cd.test", "a" * 64 + ".test", "a." * 128 + "test",
+    "localhost", "co.test", "example.unknown", "a.hosted.test",
+    "www.EXAMPLE.TEST", "www.example.test.", "sub.例え.test", "xn--r8jz45g.test",
+    "example.xn--p1ai", "xn--.test", "xn--a.test", "XN--r8jz45g.test",
+    "www..example.test", ".example.test", "example_test.test", "example!x.test",
+    "%65xample.test", "192.168.1.1", "127.1", "2130706433", "0x7f000001",
+    "0177.0.0.1", "example.123", "example.0x10", "example.1abc", "example.-test",
+    "example.a123", "[2001:db8::1]", "foo.xn--0", "example.0xg",
+])
+def test_extract_domain_matches_host_parser(hostname):
+    for mode in (crup.psl.ICANN, crup.psl.ALL, crup.psl.PRIVATE):
+        try:
+            expected = crup.parse("https://" + hostname, mode).domain_info()
+
+        except ValueError:
+            with pytest.raises(ValueError):
+                crup.extract_domain(hostname, mode)
+
+        else:
+            assert crup.extract_domain(hostname, mode) == expected
+
+
+@pytest.mark.parametrize("hostname", [
+    "", "https://example.test", "//example.test", "example.test/path",
+    "example.test:443", "user@example.test", "example.test?key=value", "example.test#part",
+    " example.test", "example.test ", "exam ple.test", "example.test\n", "example\x00.test",
+    "example.test\\path", "[2001:db8::1", "2001:db8::1",
+])
+def test_extract_domain_rejects_invalid_hosts(hostname):
+    with pytest.raises(ValueError):
+        crup.extract_domain(hostname)
+
+
+@pytest.mark.parametrize("args,kwargs", [
+    ((), {}), ((None,), {}), ((b"example.test",), {}), ((123,), {}),
+    (("example.test", "ALL"), {}), (("example.test",), {"psl": 1}),
+    (("example.test", None, None), {}), (("example.test",), {"unknown": True}),
+])
+def test_extract_domain_argument_errors(args, kwargs):
+    with pytest.raises(TypeError):
+        crup.extract_domain(*args, **kwargs)
+
 
 def test_domain_cache_and_binding(factory):
     for text, mode, expected in [
@@ -66,17 +128,22 @@ def test_domain_cache_and_binding(factory):
             assert parsed.domain_info() == info
 
 
-def test_returned_values_outlive_the_url(factory):
-    parsed = factory("https://www.example.co.test")
+@pytest.mark.parametrize("text,expected_domain,expected_suffix", [
+    ("https://www.example.co.test", "example.co.test", "co.test"),
+    ("foo://WWW.EXAMPLE.CO.TEST.", "example.co.test", "co.test"),
+    ("https://sub.例え.test", "xn--r8jz45g.test", "test"),
+])
+def test_returned_values_outlive_the_url(factory, text, expected_domain, expected_suffix):
+    parsed = factory(text)
     domain, info = parsed.domain, parsed.domain_info()
     del parsed
     gc.collect()
     # Exercise allocation/reuse after releasing the source object.
 
-    for text in ("https://other.test/new", "http://192.168.1.1") * 20:
-        temporary = factory(text)
+    for other_text in ("https://other.test/new", "http://192.168.1.1") * 20:
+        temporary = factory(other_text)
         temporary.domain_info()
         del temporary
 
-    assert domain == info.domain == "example.co.test"
-    assert info.suffix == "co.test"
+    assert domain == info.domain == expected_domain
+    assert info.suffix == expected_suffix

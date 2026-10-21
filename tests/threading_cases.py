@@ -78,6 +78,7 @@ def independent(crup, factories, rounds):
             for factory in factories:
                 parsed = factory(text, getattr(crup.psl, mode))
                 check_url(parsed, domain, suffix)
+                assert crup.extract_domain(parsed.hostname, getattr(crup.psl, mode)) == parsed.domain_info()
                 del parsed
 
     run_threads([worker] * WORKERS)
@@ -200,6 +201,7 @@ def update(crup, factories):
     observed = [threading.Event(), threading.Event()]
     # Warm each lazy access order and retain cold objects across the reload.
     cached, cold = [], []
+    extracted = crup.extract_domain("www.example.co.invalid")
 
     for factory in factories:
         for info_first in (False, True):
@@ -231,6 +233,7 @@ def update(crup, factories):
             domain = parsed.domain
             assert domain in ("example.co.invalid", "co.invalid")
             assert parsed.domain_info().domain == domain
+            assert crup.extract_domain("www.example.co.invalid").domain in ("example.co.invalid", "co.invalid")
 
             for old, value, info in cached:
                 assert old.domain == value
@@ -245,6 +248,8 @@ def update(crup, factories):
             gc.collect()
 
     run_threads([updater, lambda: reader(0), lambda: reader(1), collector])
+    assert crup.extract_domain("www.example.co.invalid").domain == "co.invalid"
+    assert extracted.domain == "example.co.invalid"
 
     for parsed in cold + [factory(cached[0][0].href) for factory in factories]:
         assert parsed.domain == parsed.domain_info().domain == "co.invalid"
